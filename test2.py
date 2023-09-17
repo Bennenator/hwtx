@@ -2,6 +2,7 @@ import streamlit as st
 import random
 from pymongo import MongoClient
 import copy
+from annotated_text import annotated_text
 
 #Must be the first code to run for the formatting
 st.set_page_config(
@@ -222,7 +223,7 @@ if st.session_state.loggedIn == True:
         for character in characters:
             if character["data"]["name"] == chosen_character_name:
                 chosen_character = character
-                goPageOne()
+                
     
     # This is similar to the outer if-else statement in that it is used to control what elements are being displayed
     # based upon (in this case) the "editing" session state. "editing" is solely an indicator as to whether or not
@@ -267,7 +268,7 @@ if st.session_state.loggedIn == True:
             if button_columns[0].button("Previous Page"):
                 st.session_state.PageNum -= 1
                 st.experimental_rerun()
-        if st.session_state.PageNum <= 3:
+        if st.session_state.PageNum <= 3 and st.session_state.PageNum > 0:
             if button_columns[4].button("Next Page"):
                 st.session_state.PageNum += 1
                 st.experimental_rerun()
@@ -399,9 +400,12 @@ else:
     if st.session_state.registering:
         # Currently registering
         with st.form("Please Register"):
-            user = st.text_input("Username")
-            psword = st.text_input("Password", type= "password")
-            confirmpsword = st.text_input("Confirm Password", type= "password")
+            writeCool(st, "Username", 2)
+            user = st.text_input("Username", label_visibility="collapsed")
+            writeCool(st, "Password", 2)
+            psword = st.text_input("Password", type= "password", label_visibility="collapsed")
+            writeCool(st, "Confirm Password", 2)
+            confirmpsword = st.text_input("Confirm Password", type= "password", label_visibility="collapsed")
             if st.form_submit_button("Register"):
                 message, code = registerUser(user, psword, confirmpsword)
                 st.write(message)
