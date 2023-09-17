@@ -445,6 +445,3 @@ else:
                     st.experimental_rerun()
     
         st.button("Go to Register", on_click=setRegistering, args=[True])
-
-# Close the MongoDB connection
-client.close()
