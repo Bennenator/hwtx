@@ -1,3 +1,13 @@
+"""
+Gamemaster's Mythical Mind
+by Bennett Rodes, Tim Nyowheoma, and Oliver 
+
+Usage: For hosting a local server, use streamlit run gmmm.py. Otherwise
+
+"""
+
+
+
 import streamlit as st
 import random
 from pymongo import MongoClient
@@ -16,7 +26,7 @@ st.set_page_config(
 page_bg_img = '''
 <style>
 .stApp {
-  background-image: url("https://www.tribality.com/wp-content/uploads/2019/07/andreas-rocha-fieldsofgold011-750x375.jpg");
+  background-image: url("https://img.freepik.com/free-photo/greet-final-battle-alone-illustration_456031-4.jpg");
   background-size: cover;
 }
 [data-testid="stHeader"] {
@@ -101,7 +111,7 @@ client = MongoClient(uri)
 # Access the database and subcollections that handle storage of characters and logins
 db = client["mydatabase"]
 login_info = db["login_info"]
-charactersdb = db["character_info"]
+charactersdb = db["character_info10"]
 
 # Streamlit title
 writeCool(st, "Gamemaster's Mythical Mind", 2)
