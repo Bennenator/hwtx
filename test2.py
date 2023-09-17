@@ -33,6 +33,7 @@ html_code = """
 <style>
   .custom-text {
     background-color: beige;
+    font-color: black;
     border: 1px solid gray;
     padding: 10px;
     border-radius: 5px;
@@ -433,3 +434,5 @@ else:
     
         st.button("Go to Register", on_click=setRegistering, args=[True])
 
+# Close the MongoDB connection
+client.close()
