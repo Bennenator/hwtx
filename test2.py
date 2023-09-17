@@ -2,7 +2,6 @@ import streamlit as st
 import random
 from pymongo import MongoClient
 import copy
-from annotated_text import annotated_text
 
 #Must be the first code to run for the formatting
 st.set_page_config(
