@@ -222,7 +222,9 @@ if st.session_state.loggedIn == True:
         for character in characters:
             if character["data"]["name"] == chosen_character_name:
                 chosen_character = character
-                
+        if st.session_state.PageNum == 0 and characters:
+            st.session_state.PageNum = 1
+            st.experimental_rerun()
     
     # This is similar to the outer if-else statement in that it is used to control what elements are being displayed
     # based upon (in this case) the "editing" session state. "editing" is solely an indicator as to whether or not
