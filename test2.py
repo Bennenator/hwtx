@@ -2,6 +2,7 @@ import streamlit as st
 import random
 from pymongo import MongoClient
 import copy
+import bcrypt
 
 #Must be the first code to run for the formatting
 st.set_page_config(
@@ -33,7 +34,7 @@ html_code = """
 <style>
   .custom-text {
     background-color: beige;
-    color: #333;
+    font-color: black;
     border: 1px solid gray;
     padding: 10px;
     border-radius: 5px;
@@ -116,12 +117,13 @@ def UserLogin(username, password):
     account = list(login_info.find({"username": username}))[0] if list(login_info.find({"username": username})) else None
     if not account:
         return "Username not found", 0
-    if account["password"] != password:
-        return "Password is invalid", 0
     
-    st.session_state.loggedIn = True
-    st.session_state.Username = username
-    return "Log in successfull!", account["_id"]
+    if bcrypt.checkpw(password.encode('utf-8'), account["password"]):
+        st.session_state.loggedIn = True
+        st.session_state.Username = username
+        return "Log in successfull!", account["_id"]
+    else:
+        return "Password is invalid :(", 0
         
 # This function takes in username, password, and confirmpassword strings, verifies several axoms that usernames and passwords
 # must follow, and if found valid the account is created
@@ -132,13 +134,13 @@ def registerUser(username, password, confirmpassword):
         return "Please enter a password", 0
     if password != confirmpassword:
         return "Passwords must match", 0
-    
+        
     if login_info.count_documents({"username":username}) > 0:
         return "Username taken", 0
-    if login_info.count_documents({"password":password}) > 0:
-        return "Password taken", 0
     
-    login_info.insert_one({"username": username, "password": password})
+    hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+
+    login_info.insert_one({"username": username, "password": hashed_password})
     st.session_state.registering = False
     return "Registration successfull!", 1
 
