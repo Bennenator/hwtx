@@ -33,7 +33,7 @@ html_code = """
 <style>
   .custom-text {
     background-color: beige;
-    font-color: black;
+    color: #333;
     border: 1px solid gray;
     padding: 10px;
     border-radius: 5px;
