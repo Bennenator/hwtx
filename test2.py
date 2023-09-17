@@ -101,7 +101,7 @@ client = MongoClient(uri)
 # Access the database and subcollections that handle storage of characters and logins
 db = client["mydatabase"]
 login_info = db["login_info"]
-charactersdb = db["character_info10"]
+charactersdb = db["character_info"]
 
 # Streamlit title
 writeCool(st, "Gamemaster's Mythical Mind", 2)
