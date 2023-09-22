@@ -36,9 +36,6 @@ background-color: rgba(0, 0, 0, 0);
 '''
 st.markdown(page_bg_img, unsafe_allow_html=True)
 
-# Connect to the MongoDB server
-uri = "mongodb+srv://brodes02:ulLJgnhbeUIH0mFf@cluster0.dqzu3tl.mongodb.net/?retryWrites=true&w=majority"
-
 # Custom HTML and CSS to style any text that is passed to writeCool()
 html_code = """
 <style>
@@ -104,17 +101,8 @@ if "changes" not in st.session_state:
     st.session_state.changes = {}
 if "PageNum" not in st.session_state:
     st.session_state.PageNum = 0
-
-# Initialize the mongodb client
-client = MongoClient(uri)
-
-# Access the database and subcollections that handle storage of characters and logins
-db = client["mydatabase"]
-login_info = db["login_info"]
-charactersdb = db["character_info10"]
-
-# Streamlit title
-writeCool(st, "Gamemaster's Mythical Mind", 2)
+if "ColumnNumber" not in st.session_state:
+    st.session_state.ColumnNumber = 3
 
 # This function takes in username and password strings, checks if they exist, and then authenticates the 
 # input username and password
@@ -124,13 +112,21 @@ def UserLogin(username, password):
     if not password:
         return "Please enter a password", 0
     
-    account = list(login_info.find({"username": username}))[0] if list(login_info.find({"username": username})) else None
+    uri = "mongodb+srv://brodes02:ulLJgnhbeUIH0mFf@cluster0.dqzu3tl.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+
+    # Access the database and subcollections that handle storage of characters and logins
+    db = client["GMMM"]
+    login_info = db["users"]
+    account = login_info.find_one({"username": username})
     if not account:
         return "Username not found", 0
     
+    client.close()
     if bcrypt.checkpw(password.encode('utf-8'), account["password"]):
         st.session_state.loggedIn = True
         st.session_state.Username = username
+        
         return "Log in successfull!", account["_id"]
     else:
         return "Password is invalid :(", 0
@@ -144,17 +140,27 @@ def registerUser(username, password, confirmpassword):
         return "Please enter a password", 0
     if password != confirmpassword:
         return "Passwords must match", 0
-        
+    
+    # Initialize the mongodb client
+    uri = "mongodb+srv://brodes02:ulLJgnhbeUIH0mFf@cluster0.dqzu3tl.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+
+    # Access the database and collection that handle storage of characters and logins
+    db = client["GMMM"]
+    login_info = db["users"]
     if login_info.count_documents({"username":username}) > 0:
         return "Username taken", 0
     
     hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
-
+    
     login_info.insert_one({"username": username, "password": hashed_password})
     st.session_state.registering = False
+    st.session_state.loggedIn = True
+    st.session_state.Username = username
+    client.close()
     return "Registration successfull!", 1
 
-# The following 3 helper functions are used in conjunction with buttons to serve as callback functions to update
+# The following 4 helper functions are used in conjunction with buttons to serve as callback functions to update
 # certain session states immediately prior to streamlit reruns (updates).
 def setRegistering(isregistering):
     st.session_state.registering = isregistering
@@ -172,40 +178,88 @@ def goPageOne():
 # to be bound and the name of the character to doubly serve as a unique ID.
 def createCharacter(username, name):
     if name:
-        characters = list(charactersdb.find({"owner":username}))
+        characters = list(queryMongo("characters", {"owner":st.session_state.Username}, findType = "All"))
         for character in characters:
             if character["data"]["name"] == name:
                 return "Name taken", 0
-        base_character = charactersdb.find_one({"owner":1})
+        base_character = queryMongo("characters", {"owner":1}, findType = "One")
         base_character["data"]["name"] = name
-        charactersdb.insert_one({"owner":st.session_state.Username, "data": base_character["data"]})
+        insertMongo("characters", [{"owner":st.session_state.Username, "data": base_character["data"]}])
         return "Character created!", 1
 
-# saveCharacter takes a character object (dictionary) and a changes object (also dictionary) as inputs and
-# checks which (if any) of the values within the input character object needs to be updated. Then, the existence
-# of the character is checked within the database of characters, and if found to exist the character is updated
-# and saved to the database
-def saveCharacter(character, changes):
-    for key, value in changes.items():
-        if key in character["data"].keys():
-            character["data"][key] = value
-    existing_character = charactersdb.find_one({"_id":character["_id"]})
+def updatePortion(characterID, changes):
+    existing_character = queryMongo("characters", {"_id":characterID}, findType = "One")
     if existing_character:
-        charactersdb.update_one({"_id": existing_character["_id"]}, {"$set": character})
-        return f"{character['data']['name']} saved!"
+        for key, value in changes.items():
+            existing_character["data"][key] = value
+        updateMongo("characters", ({"_id": characterID}, {"$set": {"data" : existing_character["data"]}}))
+        return f"{existing_character['data']['name']} saved!"
     else:
         return "Character not found :("
+
+# key_Updates must be tuple of form ({"_id": ID}, {"$set": object}) where ID is the matching "_id" field in the database and object is the new data of that object in the database
+def updateMongo(databaseTitle, key_Updates_Tuple):
+    # Initialize the mongodb client
+    uri = "mongodb+srv://brodes02:ulLJgnhbeUIH0mFf@cluster0.dqzu3tl.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+
+    # Access the database and  collections that handle storage of characters and logins
+    db = client["GMMM"]
+    sub_db = db[databaseTitle]
+    output = sub_db.update_one(key_Updates_Tuple[0], key_Updates_Tuple[1])
+    
+    client.close()
+
+# parameters a dictionary of the form that find_one() and find_all() use
+def queryMongo(databaseTitle, parameters, findType="One"):
+    uri = "mongodb+srv://brodes02:ulLJgnhbeUIH0mFf@cluster0.dqzu3tl.mongodb.net/?retryWrites=true&w=majority"
+    if findType == "One":
+        # Initialize the mongodb client
+        client = MongoClient(uri)
+
+        # Access the database and subsub_dbs that handle storage of characters and logins
+        db = client["GMMM"]
+        sub_db = db[databaseTitle]
+        output = copy.deepcopy(sub_db.find_one(parameters))
+        client.close()
+        return output
+    else:
+        # Initialize the mongodb client
+        client = MongoClient(uri)
+
+        # Access the database and subsub_dbs that handle storage of characters and logins
+        db = client["GMMM"]
+        sub_db = db[databaseTitle]
+        output = copy.deepcopy(list(sub_db.find(parameters)))
+        client.close()
+        return output
+
+# insertedItems must be iterable of items to insert
+def insertMongo(databaseTitle, insertedItems):
+    uri = "mongodb+srv://brodes02:ulLJgnhbeUIH0mFf@cluster0.dqzu3tl.mongodb.net/?retryWrites=true&w=majority"
+    # Initialize the mongodb client
+    client = MongoClient(uri)
+
+    # Access the database and  collection that handle storage of characters and logins
+    db = client["GMMM"]
+    sub_db = db[databaseTitle]
+    for item in insertedItems:
+        output = sub_db.insert_one(item)
+    client.close()
 
 # Changing between scenes in Gamemaster's Mythical Mind is handled by dynamic checking of session states,
 # which are preserved through streamlit reruns (updates). The main logic of this large if-else statement is
 # designed to display the page correctly after logging in or logging out.
 if st.session_state.loggedIn == True:
-    # The logged in page is handled within this block
     
+    headbar = st.container()
     #characters is the list of character objects that have an "owner" attribute of the current logged in User.
-    characters = list(charactersdb.find({"owner":st.session_state.Username}))
-    chosen_character = {"data":{}}
     
+    characters = queryMongo("characters", {"owner":st.session_state.Username}, findType = "All")
+    chosen_character = characters[0] if characters else {"data":{}}
+    
+    character_header_dict = {character["data"]["name"]: character["data"]["pictureURL"] for character in characters}
+     
     # This with structure is how streamlit likes to handle the sidebar object. In this case, the sidebar is 
     # designed to handle account management, character creation, and character selection.
     with st.sidebar:
@@ -238,175 +292,82 @@ if st.session_state.loggedIn == True:
         if st.session_state.PageNum == 0 and characters:
             st.session_state.PageNum = 1
             st.experimental_rerun()
+    # Define the dictionary of categories and attribute names
+    category_dict = {
+        "Attributes": ["str", "dex", "con", "int", "wis", "cha"],
+        "Character Info": ["name", "class", "race", "proficiencies", "level", "xpBonus", "pictureURL", "hp", "ac", "thac0", "backstory", "currentHP"],
+        "Equipment": ["weapons", "inventory", "unencumbered", "light", "moderate", "heavy", "severe"],
+        "Wealth": ["cp", "sp", "gp", "pp", "treasure"],
+        "Resources": ["weight", "food", "water", "ammo", "companions", "spells"],
+        "Special Abilities": ["specialAbilities", "notes"]
+    }
+
+    # Initialize the result dictionary
+    result_dict = {}
+
+    # Iterate through the category_dict
+    for category, attributes in category_dict.items():
+        category_subset = {}
+        for attribute in attributes:
+            if attribute in chosen_character["data"]:
+                category_subset[attribute] = chosen_character["data"][attribute]
+        if category_subset:
+            result_dict[category] = category_subset
     
-    # This is similar to the outer if-else statement in that it is used to control what elements are being displayed
-    # based upon (in this case) the "editing" session state. "editing" is solely an indicator as to whether or not
-    # the current character is being edited.
-    if st.session_state.editing:
-        # Currently being edited block
+    def updateNumColumns():
+        st.session_state.ColumnNumber = st.session_state.ColumnNumber
+    
+    # Define the number of columns for layout in st.session_state.ColumnNumber
+    st.sidebar.slider("Columns", min_value = 1, max_value = 8, step = 1, on_change=updateNumColumns, key="ColumnNumber")
+
+    # Initialize counters and containers
+    counter = 0
+    containerIndex = 0
+    containers = [st.container()]  # Create a list of Streamlit containers
+    containerColumns = []  # List to store columns within containers
+    containerColumnForms = []  # List to store forms within columns
+
+    # Loop through the items in result_dict
+    for key, value in result_dict.items():
+        # Create a new column within the current container
+        containerColumns.append(containers[containerIndex].columns(st.session_state.ColumnNumber))
         
-        # This sets up the columns for the main display of the character information and editing buttons.
-        charcol1, charcol2 = st.columns([4,6])
-        subcol1, subcol2 = charcol1.columns(2)
+        # Create an empty form for each column
+        containerColumnForms.append([{} for i in range(st.session_state.ColumnNumber)])
         
-        # If the button labeled "save" is pressed, it calls saveCharacter with the listed args and then updates
-        # the relevant session states and reruns streamlit to display the correct state of the page
-        if subcol1.button("save", on_click=saveCharacter, args = [chosen_character, st.session_state.changes]):
-            st.session_state.editing = False
-            st.session_state.changes = {}
+        # Create a form element for the current key and store it in the form dictionary
+        containerColumnForms[containerIndex][counter][key] = containerColumns[containerIndex][counter].form(key)
+        
+        # Write a title (using a function called writeCool) for the current key
+        writeCool(containerColumnForms[containerIndex][counter][key], f"{chosen_character['data']['name']}'s {key}:")
+        
+        # Iterate through the sub-items of the current key and add text input fields
+        for subKey, subValue in value.items():
+            containerColumnForms[containerIndex][counter][key].text_input(subKey, value=subValue, key=subKey)
+        
+        # Add a form submit button for saving the data
+        if containerColumnForms[containerIndex][counter][key].form_submit_button(f"Save {key}"):
+            updatePortion(chosen_character["_id"], {megaSubKey:st.session_state[megaSubKey] for megaSubKey in value.keys()})
             st.experimental_rerun()
-            
-        if subcol2.button("cancel"):
-            st.session_state.changes = {}
-            st.session_state.editing = False
-            st.experimental_rerun()
-        
-        # This is the main display driver for the selected character's information. It loops through each
-        # key-value pair within the chosen character's "data" attribute and displays an editable text field
-        # with a label of whatever attribute it is and an initial value of whatever the value already was.
-        # Then, when the submit button is pressed, the session state of "changes" (dictionary) receives a new
-        # key value pair of whatever the change was and to what was changed. This means that values are only 
-        # "locked in" when the submit button is pressed.
-        for key, dict_value in chosen_character["data"].items():
-            with charcol1.form(key):
-                writeCool(st, key, 2)
-                new_entry = st.text_input(key, value=dict_value, label_visibility="collapsed")
-                submitbutton = st.form_submit_button("submit")
-                if submitbutton:
-                    st.session_state.changes[key] = new_entry
-    else:
-        # Currently not being edited block
-        #Changing the page based off position
-        button_columns = st.columns([.2,.25,.1,.25,.2])
-        if st.session_state.PageNum > 1:
-            if button_columns[0].button("Previous Page"):
-                st.session_state.PageNum -= 1
-                st.experimental_rerun()
-        if st.session_state.PageNum <= 3 and st.session_state.PageNum > 0:
-            if button_columns[4].button("Next Page"):
-                st.session_state.PageNum += 1
-                st.experimental_rerun()
-        button_columns[2].button("Edit", on_click=setEditing, args=[True])
-        #Character Details Page
-        if st.session_state.PageNum == 1:
-        
-            main_cols = st.columns(2)
-            name_column, level_column= main_cols[1].columns([0.5,0.5])
-            class_column, current_XP_column = main_cols[1].columns([0.5,0.5])
-            race_column, next_XP_column = main_cols[1].columns([0.5,0.5])
-            bonusXP_column, notes_column = main_cols[1].columns([0.5,0.5])
-            
-            
-            name = chosen_character["data"]["name"]
-            level = chosen_character["data"]["level"]
-            occupation = chosen_character["data"]["class"]
-            race = chosen_character["data"]["race"]
-            cxp = chosen_character["data"]["currentXP"]
-            nxp = chosen_character["data"]["nextXP"]
-            bxp = chosen_character["data"]["xpBonus"]
-            notes = chosen_character["data"]["notes"]
-            str_attr = chosen_character["data"]["str"]
-            dex_attr = chosen_character["data"]["dex"]
-            con_attr = chosen_character["data"]["con"]
-            int_attr = chosen_character["data"]["int"]
-            wis_attr = chosen_character["data"]["wis"]
-            cha_attr = chosen_character["data"]["cha"]
-            special_abilities = chosen_character["data"]["specialAbilities"]
+        # Check if the current counter reaches the specified number of columns
+        if counter == st.session_state.ColumnNumber - 1:
+            # If so, move to the next container
+            containerIndex += 1
+            containers.append(st.container())  # Create a new container
+            counter = 0
+        else:
+            # Otherwise, increment the counter for the current container
+            counter += 1
 
-            with main_cols[0]:
-                writeCool(st, f"Strength: {str_attr}", 2)
-                writeCool(st, f"Dexterity: {dex_attr}", 2)
-                writeCool(st, f"Constitution: {con_attr}", 2)
-                writeCool(st, f"Intelligence: {int_attr}", 2)
-                writeCool(st, f"Wisdom: {wis_attr}", 2)
-                writeCool(st, f"Charisma: {cha_attr}", 2)
-                
-                tripleCols = st.columns(4)
-                writeCool(tripleCols[0], chosen_character["data"]["hp"], 3)
-                writeCool(tripleCols[0], "Max HP", 1)
-                writeCool(tripleCols[1], chosen_character["data"]["currentHP"], 3)
-                writeCool(tripleCols[1], "Current HP", 1)
-                writeCool(tripleCols[2], chosen_character["data"]["ac"], 3)
-                writeCool(tripleCols[2], "AC", 1)
-                writeCool(tripleCols[3], chosen_character["data"]["thac0"], 3)
-                writeCool(tripleCols[3], "Thac0", 1)
+    # Get the image URL from the chosen_character data
+    image_url = chosen_character["data"]["pictureURL"]
 
-            with name_column:
-                writeCool(st, f"Name: {name}", 3)
-            with level_column:
-                writeCool(st, f"Level: {str(level)}", 2)
-            with class_column:
-                writeCool(st, f"Class: {occupation}", 2)
-            with current_XP_column:
-                writeCool(st, f"Current XP: {str(cxp)}", 2)
-            with race_column:
-                writeCool(st, f"Race: {race}", 2)
-            with next_XP_column:
-                writeCool(st, f"Next XP: {str(nxp)}", 2)
-            with bonusXP_column:
-                writeCool(st, f"XP Bonus: {str(bxp)}", 2)
-            with notes_column:
-                writeCool(st, f"Notes: {notes}", 2)
-            #Character portrait MUST END IN .png, .jpg, or .jpeg. 
-            with main_cols[1]:
-                image_url = chosen_character["data"]["pictureURL"]
-                st.image(image_url)
-                # Special Abilities
-                st.markdown("<h4 style='text-align: left; color: white;'>Special Abilities</h4>",
-                        unsafe_allow_html=True)
-                writeCool(st, special_abilities, 1)
-        #Inventory Page
-        elif st.session_state.PageNum == 2:
-            with st.container():
-                writeCool(st, "Welcome to your backpack, this includes all of your inventory!", 2)
-                personalEquipmentTab, treasureTab, companionTab = st.tabs(
-                    ["Personal equipment", "Treasure and magical items", "Companion/henchmen"])
-            with personalEquipmentTab:
-                writeCool(st, "Weight Allowance", 2)
-                encumberanceCols = st.columns(5)
-                writeCool(encumberanceCols[0], chosen_character["data"]["unencumbered"], 2)
-                writeCool(encumberanceCols[0], "Unencumbered", 1)
-                writeCool(encumberanceCols[1], chosen_character["data"]["light"], 2)
-                writeCool(encumberanceCols[1], "Light", 1)
-                writeCool(encumberanceCols[2], chosen_character["data"]["moderate"], 2)
-                writeCool(encumberanceCols[2], "Moderate", 1)
-                writeCool(encumberanceCols[3], chosen_character["data"]["heavy"], 2)
-                writeCool(encumberanceCols[3], "Heavy", 1)
-                writeCool(encumberanceCols[4], chosen_character["data"]["severe"], 2)
-                writeCool(encumberanceCols[4], "Severe", 1)
-                
-                st.divider()
-                inventoryCols = st.columns([.7,.3])
-                writeCool(inventoryCols[0], "Inventory", 2)
-                writeCool(inventoryCols[0], chosen_character["data"]["inventory"], 1)
-                
-                writeCool(inventoryCols[1], f'Weight: {chosen_character["data"]["weight"]}', 2)
-                writeCool(inventoryCols[1], f'Food: {chosen_character["data"]["food"]}', 2)
-                writeCool(inventoryCols[1], f'Water: {chosen_character["data"]["water"]}', 2)
-                writeCool(inventoryCols[1], f'Ammo: {chosen_character["data"]["ammo"]}', 2)
-                
-            with treasureTab:
-                writeCool(st, "Treasure, Magical Items, and Jewels", 2)
-                writeCool(st, chosen_character["data"]["treasure"], 1)
-
-            with companionTab:
-                writeCool(st, "Henchmen and Animal Companions", 2)
-                writeCool(st, chosen_character["data"]["companions"], 1)
-
-        #Spells Page
-        elif st.session_state.PageNum == 3:
-            writeCool(st, "Spells", 2)
-            writeCool(st, chosen_character["data"]["spells"])
+    # Display the character's image in the first column of the first container
+    #containerColumns[0][0].image(image_url)
 
 
-
-        #Backstory
-        elif st.session_state.PageNum == 4:
-            writeCool(st, "Backstory", 2)
-            columnbackstory = st.columns(3)
-            writeCool(columnbackstory[1], chosen_character["data"]["backstory"], 2)
-
-        
+    
+    
 else:
     #Not logged in
     writeCool(st, "Please log in or register an account.", 2)
