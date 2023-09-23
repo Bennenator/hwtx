@@ -34,7 +34,7 @@ background-color: rgba(0, 0, 0, 0);
 }
 </style>
 '''
-st.markdown(page_bg_img, unsafe_allow_html=True)
+#st.markdown(page_bg_img, unsafe_allow_html=True)
 
 # Custom HTML and CSS to style any text that is passed to writeCool()
 html_code = """
@@ -55,10 +55,10 @@ html_code2 = """</span>
 outlined_text_style = """
 <style>
   .outlined-text {
-    font-weight: bold;
+    font-weight: default;
     font-size: 24px;
-    color: beige;
-    -webkit-text-stroke: 1px grey;
+    color: black;
+    -webkit-text-stroke: 1px black;
   }
 </style>
 <span class="outlined-text">"""
@@ -270,7 +270,7 @@ if st.session_state.loggedIn == True:
         # ALWAYS with a single submit button and no other buttons.
         with st.form("Create a new character"):
             namefieldcol, namebcol = st.columns([7,3])
-            namefield = namefieldcol.text_input("Enter new name")
+            namefield = namefieldcol.text_input("Enter new name", label_visibility = "collapsed", placeholder = "Enter a name")
             namebutton = namebcol.form_submit_button("Create")
             
             # If the button labeled "Create" is pressed, it calls createCharacter with the current User and
@@ -314,43 +314,37 @@ if st.session_state.loggedIn == True:
         if category_subset:
             result_dict[category] = category_subset
     
-    def updateNumColumns():
-        st.session_state.ColumnNumber = st.session_state.ColumnNumber
-    
     # Define the number of columns for layout in st.session_state.ColumnNumber
-    st.sidebar.slider("Columns", min_value = 1, max_value = 8, step = 1, on_change=updateNumColumns, key="ColumnNumber")
+    numColumns = 3
 
     # Initialize counters and containers
     counter = 0
     containerIndex = 0
     containers = [st.container()]  # Create a list of Streamlit containers
     containerColumns = []  # List to store columns within containers
-    containerColumnForms = []  # List to store forms within columns
+    containerColumnExpanders = []  # List to store forms within columns
 
     # Loop through the items in result_dict
     for key, value in result_dict.items():
         # Create a new column within the current container
-        containerColumns.append(containers[containerIndex].columns(st.session_state.ColumnNumber))
+        containerColumns.append(containers[containerIndex].columns(numColumns))
         
-        # Create an empty form for each column
-        containerColumnForms.append([{} for i in range(st.session_state.ColumnNumber)])
+        # Create an empty expander for each column
+        containerColumnExpanders.append([{} for i in range(numColumns)])
         
-        # Create a form element for the current key and store it in the form dictionary
-        containerColumnForms[containerIndex][counter][key] = containerColumns[containerIndex][counter].form(key)
-        
-        # Write a title (using a function called writeCool) for the current key
-        writeCool(containerColumnForms[containerIndex][counter][key], f"{chosen_character['data']['name']}'s {key}:")
+        # Create an expander element for the current key in an expander element and store it in the expander dictionary
+        containerColumnExpanders[containerIndex][counter][key] = containerColumns[containerIndex][counter].expander(f"{chosen_character['data']['name']}'s {key}:")
         
         # Iterate through the sub-items of the current key and add text input fields
         for subKey, subValue in value.items():
-            containerColumnForms[containerIndex][counter][key].text_input(subKey, value=subValue, key=subKey)
+            containerColumnExpanders[containerIndex][counter][key].text_input(subKey, value=subValue, key=f"{subKey}")
         
         # Add a form submit button for saving the data
-        if containerColumnForms[containerIndex][counter][key].form_submit_button(f"Save {key}"):
+        if containerColumnExpanders[containerIndex][counter][key].button(f"Save {key}"):
             updatePortion(chosen_character["_id"], {megaSubKey:st.session_state[megaSubKey] for megaSubKey in value.keys()})
             st.experimental_rerun()
         # Check if the current counter reaches the specified number of columns
-        if counter == st.session_state.ColumnNumber - 1:
+        if counter == numColumns - 1:
             # If so, move to the next container
             containerIndex += 1
             containers.append(st.container())  # Create a new container
@@ -358,12 +352,12 @@ if st.session_state.loggedIn == True:
         else:
             # Otherwise, increment the counter for the current container
             counter += 1
-
+    
     # Get the image URL from the chosen_character data
     image_url = chosen_character["data"]["pictureURL"]
-
+    
     # Display the character's image in the first column of the first container
-    #containerColumns[0][0].image(image_url)
+    # containerColumns[1][1].image(image_url)
 
 
     
